@@ -73,6 +73,7 @@ sudo mv /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap ~
 ## Разработка
 
 - Мод с hot reload: `claude --plugin-dir ./plugin`. Проверка: `claude plugin validate ./plugin`.
+- Типы `claude-code` генерирует движок, их нет в репо: выполните `/plugin-types ./plugin/.claude-plugin/types` в интерактивном Claude Code, после этого `tsc -p plugin` и редактор перестанут ругаться.
 - Пилюля: `swiftc -O -o ~/.claude/pet/ClaudePill.app/Contents/MacOS/ClaudePill pill/main.swift`, потом `pkill -x ClaudePill; open ~/.claude/pet/ClaudePill.app`.
 - Демо без Claude: положите в `~/.claude/pet/sessions/demo.json` строку `{"project":"demo","branch":"main","title":"Демо","state":"waiting","text":"нужно разрешение","updatedAt":<ms>}`.
 
