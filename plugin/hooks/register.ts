@@ -1,4 +1,4 @@
-import type { Engine, Register } from 'claude-code';
+import type { EngineInterface, Register } from 'claude-code';
 
 type PillState =
   | 'idle'
@@ -48,7 +48,9 @@ const basename = (path: string) => {
 };
 
 const toTitle = (text: string) => {
-  const line = text.trim().split('\n')[0].trim();
+  const [firstLine = ''] = text.trim().split('\n');
+  const line = firstLine.trim();
+
   return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH)}…` : line;
 };
 
@@ -61,15 +63,19 @@ const describe = (tool: string, input: Record<string, unknown>) => {
   if (tool === 'Bash' && command) {
     return `$ ${command}`;
   }
+
   if (tool === 'Read' && name) {
     return `читаю ${name}`;
   }
+
   if ((tool === 'Edit' || tool === 'Write') && name) {
     return `правлю ${name}`;
   }
+
   if (tool === 'Grep' || tool === 'Glob') {
     return 'ищу по коду';
   }
+
   if (tool === 'Agent' || tool === 'Task') {
     return typeof input.description === 'string'
       ? `сабагент: ${input.description}`
@@ -79,11 +85,12 @@ const describe = (tool: string, input: Record<string, unknown>) => {
   return tool;
 };
 
-async function write($: Engine, state: PillState, text: string) {
+async function write($: EngineInterface, state: PillState, text: string) {
   if (!file) {
     return;
   }
   entry = { ...entry, state, text, updatedAt: Date.now() };
+
   await $.fs.write(file, JSON.stringify(entry));
 }
 
@@ -91,20 +98,23 @@ async function write($: Engine, state: PillState, text: string) {
 const backgroundTaskId = (ran: unknown) => {
   const typed = (ran as { result?: { backgroundTaskId?: string } }).result
     ?.backgroundTaskId;
+
   if (typed) {
     return typed;
   }
 
   const text = JSON.stringify(ran);
+
   return BACKGROUND_HINT.test(text)
     ? text.match(BACKGROUND_ID)?.[1]
     : undefined;
 };
 
-async function listBackground($: Engine) {
+async function listBackground($: EngineInterface) {
   const agents = (await $.agent.list()).filter((agent) => {
     return agent.status === 'running' && !agent.parentId;
   });
+
   return [
     ...backgroundTasks.values(),
     ...agents.map((agent) => {
@@ -114,11 +124,13 @@ async function listBackground($: Engine) {
 }
 
 const backgroundText = (tasks: string[]) => {
+  const [first = ''] = tasks;
   const rest = tasks.length > 1 ? ` и ещё ${tasks.length - 1}` : '';
-  return `фоном: ${tasks[0].slice(0, 40)}${rest}`;
+
+  return `фоном: ${first.slice(0, 40)}${rest}`;
 };
 
-async function isSubagent($: Engine, agentId: string) {
+async function isSubagent($: EngineInterface, agentId: string) {
   if (!subagents.has(agentId)) {
     for (const agent of await $.agent.list()) {
       subagents.add(agent.id);
@@ -127,7 +139,7 @@ async function isSubagent($: Engine, agentId: string) {
   return subagents.has(agentId);
 }
 
-async function readBranch($: Engine) {
+async function readBranch($: EngineInterface) {
   const { exitCode, stdout } = await $.process.run([
     'git',
     'rev-parse',
@@ -138,7 +150,7 @@ async function readBranch($: Engine) {
 }
 
 // После /clear id меняется без session.start: подхватываем новый id и сохранённое название
-async function syncSession($: Engine) {
+async function syncSession($: EngineInterface) {
   const next = `${dir}/sessions/${await $.session.id()}.json`;
   if (next === file) {
     return;
@@ -181,11 +193,13 @@ export const register: Register = (on) => {
 
   on('turn.start', async ($, e, next) => {
     await syncSession($);
+
     entry = {
       ...entry,
       branch: await readBranch($),
       title: entry.title || toTitle(e.text),
     };
+
     return next(e);
   });
 
@@ -194,6 +208,7 @@ export const register: Register = (on) => {
     if (!e.agentId && e.index === 0) {
       await write($, 'thinking', 'думаю…');
     }
+
     return yield* next(e);
   });
 
@@ -203,6 +218,7 @@ export const register: Register = (on) => {
       return next(e);
     }
     const action = describe(e.tool, e as unknown as Record<string, unknown>);
+
     if (ASKING.has(e.tool)) {
       await write($, 'asking', ASKING_TEXT);
     } else {
@@ -210,12 +226,15 @@ export const register: Register = (on) => {
     }
     const ran = await next(e);
     const taskId = backgroundTaskId(ran);
+
     if (taskId) {
       backgroundTasks.set(taskId, action);
     }
+
     if (entry.state === 'asking' || entry.state === 'waiting') {
       await write($, 'thinking', 'думаю…');
     }
+
     return ran;
   }).catch(skip);
 
@@ -224,6 +243,7 @@ export const register: Register = (on) => {
     if (!ASKING.has(e.tool_name)) {
       await write($, 'waiting', WAITING_TEXT);
     }
+
     return next(e);
   }).catch(skip);
 
@@ -234,6 +254,7 @@ export const register: Register = (on) => {
     ) {
       await write($, 'waiting', WAITING_TEXT);
     }
+
     return next(e);
   }).catch(skip);
 
@@ -254,23 +275,29 @@ export const register: Register = (on) => {
         e.answer.trim().endsWith('?') ? 'готово, есть вопрос' : 'готово',
       );
     }
+
     return done;
   });
 
   // Уведомление о завершении фоновой задачи приходит строкой транскрипта с <task-id>
   on('session.append', async ($, e, next) => {
     const appended = await next(e);
+
     for (const [, id] of JSON.stringify(e.message.content).matchAll(
       /<task-id>([^<]+)<\/task-id>/g,
     )) {
-      backgroundTasks.delete(id);
+      if (id) {
+        backgroundTasks.delete(id);
+      }
     }
+
     return appended;
   }).catch(skip);
 
   // Файл не удаляем: при resume название беседы подхватится обратно
   on('session.end', async ($, e, next) => {
     await write($, 'ended', '');
+
     return next(e);
   });
 };
