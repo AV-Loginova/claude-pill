@@ -1,0 +1,6 @@
+{
+  "name": "status-pill",
+  "version": "0.8.1",
+  "description": "Пишет статус сессии для плавающей пилюли ClaudePill поверх всех окон",
+  "author": { "name": "alloginova" }
+}

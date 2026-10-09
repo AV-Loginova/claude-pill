@@ -1,0 +1,12 @@
+{
+  "name": "claude-pet",
+  "owner": { "name": "Alena Loginova" },
+  "description": "Плавающая пилюля со статусами всех сессий Claude Code",
+  "plugins": [
+    {
+      "name": "status-pill",
+      "source": "./plugin",
+      "description": "Статус сессий Claude Code для плавающей пилюли ClaudePill"
+    }
+  ]
+}
